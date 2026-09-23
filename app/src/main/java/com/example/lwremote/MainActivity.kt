@@ -7,7 +7,6 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import kotlin.math.min
 
 class MainActivity : AppCompatActivity() {
 
@@ -67,25 +66,60 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // START GAME: 83 05 E8, 37 кГц, ровно одна передача.
+    /*
+     * СТАРТ ИГРЫ
+     *
+     * Частота: 37 кГц
+     * Команда: 83 05 E8
+     *
+     * Формат:
+     * 2400 мкс MARK
+     * 600 мкс SPACE
+     *
+     * Бит 0:
+     * 600 мкс MARK
+     * 600 мкс SPACE
+     *
+     * Бит 1:
+     * 1200 мкс MARK
+     * 600 мкс SPACE
+     */
     private fun sendStart() {
+
         val frequency = 37_000
+
         val pattern = ArrayList<Int>()
 
-        addCarrier(pattern, 2400, frequency)
+        // Стартовый импульс
+        pattern.add(2400)
         pattern.add(600)
 
-        sendByte(pattern, 0x83, frequency)
-        sendByte(pattern, 0x05, frequency)
-        sendByte(pattern, 0xE8, frequency)
+        // 0x83
+        sendByte(pattern, 0x83)
 
-        ir.transmit(frequency, pattern.toIntArray())
+        // 0x05
+        sendByte(pattern, 0x05)
+
+        // 0xE8
+        sendByte(pattern, 0xE8)
+
+        ir.transmit(
+            frequency,
+            pattern.toIntArray()
+        )
     }
 
-    // KILL / 100 HP:
-    // PLAYER_ID=23, TEAM_ID=2, DAMAGE_ID=15.
-    // 50 кГц, ровно одна передача.
+    /*
+     * УБИТИЕ / 100 HP
+     *
+     * PLAYER_ID = 23
+     * TEAM_ID   = 2
+     * DAMAGE_ID = 15
+     *
+     * Частота: 50 кГц
+     */
     private fun sendKill() {
+
         val playerId = 23
         val teamId = 2
         val damageId = 15
@@ -96,79 +130,76 @@ class MainActivity : AppCompatActivity() {
             (damageId shl 2)
 
         val frequency = 50_000
+
         val pattern = ArrayList<Int>()
 
-        addCarrier(pattern, 2400, frequency)
+        // Стартовый импульс
+        pattern.add(2400)
         pattern.add(600)
 
         var ones = 0
 
+        // Передаём 16 бит, начиная со старшего
         for (i in 15 downTo 0) {
+
             val bit = (playerData shr i) and 1
 
             if (bit == 1) {
                 ones++
-                addCarrier(pattern, 1200, frequency)
-            } else {
-                addCarrier(pattern, 600, frequency)
-            }
 
-            pattern.add(600)
+                // Логическая 1
+                pattern.add(1200)
+                pattern.add(600)
+
+            } else {
+
+                // Логический 0
+                pattern.add(600)
+                pattern.add(600)
+            }
         }
 
+        // Бит чётности
         if (ones % 2 != 0) {
-            addCarrier(pattern, 1200, frequency)
+            pattern.add(1200)
         } else {
-            addCarrier(pattern, 600, frequency)
+            pattern.add(600)
         }
 
         pattern.add(600)
 
-        ir.transmit(frequency, pattern.toIntArray())
+        ir.transmit(
+            frequency,
+            pattern.toIntArray()
+        )
     }
 
-    // Формирует ON/OFF последовательность несущей.
-    private fun addCarrier(
-        pattern: ArrayList<Int>,
-        durationUs: Int,
-        frequency: Int
-    ) {
-        val periodUs = 1_000_000.0 / frequency
-        val halfPeriod = (periodUs / 2.0).toInt()
-
-        var remaining = durationUs
-
-        while (remaining > 0) {
-            val onTime = min(halfPeriod, remaining)
-            pattern.add(onTime)
-            remaining -= onTime
-
-            if (remaining <= 0) {
-                break
-            }
-
-            val offTime = min(halfPeriod, remaining)
-            pattern.add(offTime)
-            remaining -= offTime
-        }
-    }
-
-    // Передача байта MSB first.
+    /*
+     * Передача одного байта.
+     *
+     * Старший бит идёт первым.
+     */
     private fun sendByte(
         pattern: ArrayList<Int>,
-        value: Int,
-        frequency: Int
+        value: Int
     ) {
+
         for (i in 7 downTo 0) {
+
             val bit = (value shr i) and 1
 
             if (bit == 1) {
-                addCarrier(pattern, 1200, frequency)
-            } else {
-                addCarrier(pattern, 600, frequency)
-            }
 
-            pattern.add(600)
+                // 1 = 1200 мкс MARK + 600 мкс SPACE
+                pattern.add(1200)
+                pattern.add(600)
+
+            } else {
+
+                // 0 = 600 мкс MARK + 600 мкс SPACE
+                pattern.add(600)
+                pattern.add(600)
+            }
         }
     }
 }
